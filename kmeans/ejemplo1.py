@@ -1,6 +1,7 @@
 from numpy import random, array, linalg, newaxis, argmin
 import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
+from sklearn.cluster import KMeans as kms
 
 """
 Fuente: https://www.geeksforgeeks.org/k-means-clustering-introduction/
@@ -24,6 +25,7 @@ class Kmean:
         # Inicializo atributos
         self.k, self.clusters = 3, None  # Establecer el número de clusters (k) y inicializar clusters
         # Crear un conjunto de datos con 'k' centros
+        #Es una función de sklearn.datasets que genera datos distribuidos alrededor de varios centros (o "blobs").
         self.X, self.y = make_blobs(n_samples=500, n_features=2, centers=self.k, random_state=23)
     
     def plot_makeblobs(self):
@@ -80,10 +82,27 @@ class Kmean:
         plt.scatter(centers[:, 0], centers[:, 1], marker='^', c='red', s=100)  # Graficar los centros
         plt.show()  # Mostrar el gráfico
 
+    def plot_elbow_method(self):
+        # Método para graficar el Elbow Method
+        inertia = []  # Lista para almacenar las inercias
+        K = range(1, 11)  # Rango de valores de k a probar
+        #Entrenar KMeans con k clusters
+        inertia = [kms(n_clusters=k).fit(self.X).inertia_ for k in K]
+        # Graficar los resultados del Elbow Method
+        plt.figure(figsize=(8, 6))
+        plt.plot(K, inertia, 'bo-')
+        plt.xlabel('Número de Clusters (k)')
+        plt.ylabel('Inercia')
+        plt.title('Método del Codo')
+        plt.show()  # Mostrar el gráfico
+    
+
 ########################################### Ejemplo #1 #########################################################
 
 # Crear una instancia de la clase Kmean
 kmean_model = Kmean()
+# Grafico metodo del codo
+kmean_model.plot_elbow_method()
 # Inicializar los centroides aleatorios
 kmean_model.init_random_centroids()
 # Asignar, actualizar y predecir el centro del cluster
