@@ -14,3 +14,7 @@ Por otro lado, la carpeta **Trabajo_clase_2** contiene un ejemplo de análisis d
 https://www.nasa.gov/content/prognostics-center-of-excellence-data-set-repository.
 Para este trabajo se utilizará el set de datos # 4: Bearings
 Este set de datos consiste en tres conjuntos de prueba de un sistema de rodamientos, para efectos del programa solamente se utilizará el set de datos #2 visto en las carpetas **2nd_test**.
+
+Ejecución del proyecto.
+
+Para ejecutar el proyecto, diríjase a la carpeta "Proyecto" dentro de su terminal. Posteriormente, diríjase a la carpeta src y luego ejecute el comando main.py.
