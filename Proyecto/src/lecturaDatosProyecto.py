@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import PercentFormatter
+import numpy as np
 
 class datosProyecto: # Clase que se encarga de leer datos del proyecto
     def __init__(self, path):# Constructor clase, recibe como parametro ruta de datos
@@ -24,7 +25,7 @@ class datosProyecto: # Clase que se encarga de leer datos del proyecto
         conteo_fallas['Acumulado %'] = conteo_fallas['Conteo'].cumsum()/conteo_fallas['Conteo'].sum()*100
 
         # Determino los circuitos que causan 80 % de las fallas, los guardo en una lista
-        self.circuitos_bajo_80 = conteo_fallas[conteo_fallas['Acumulado %'] <= 80]['Circuito'].tolist()
+        self.circuitos_bajo_80 = set(conteo_fallas[conteo_fallas['Acumulado %'] <= 80]['Circuito'])
 
         # Definicion colores pareto y tamño de linea
         color1, color2, line_size = 'steelblue','red', 4
@@ -60,12 +61,37 @@ class datosProyecto: # Clase que se encarga de leer datos del proyecto
         print("Cantidad total de circuitos:", len(self.circuitos_bajo_80))
 
         # Filtrar el DataFrame para que solo contenga los circuitos a analizar
-        df_filtrado = self.dataFrame[self.dataFrame['Nombre Circuito'].isin(self.circuitos_bajo_80)]
-
+        self.dataFrame = self.dataFrame[self.dataFrame['Nombre Circuito'].isin(iter(self.circuitos_bajo_80))]
         # Guardar el DataFrame filtrado en un nuevo archivo Excel
-        df_filtrado.to_excel(r'..\data_output\Circuitos_a_Analizar_2.xlsx', index=False)
+        self.dataFrame.to_excel(r'..\data_output\Circuitos_a_Analizar_2.xlsx', index=False)
 
-        print("El archivo ha sido reducido y guardado como 'Circuitos_a_Analizar.xlsx'.")
+
+    def monteCarloProbabilidadFallaCircuito(self, num_simulations=10000):
+        #Inicializar un diccionario para almacenar las probabilidades de fallas por circuito
+        probabilidades_falla = {}
+                
+        # Para cada circuito en los datos, realizamos una simulación
+        for circuito, df_circuito in self.dataFrame.groupby('Nombre Circuito'):
+            
+            # Contamos las ocurrencias de cada causa para este circuito
+            conteo_causas = df_circuito['Causa'].value_counts()
+            
+            # Normalizamos para que sumen a 1 (distribución de probabilidades)
+            probabilidad_causas = conteo_causas / conteo_causas.sum()
+            
+            # Simular las fallas usando una distribución de Monte Carlo
+            simulaciones = np.random.choice(probabilidad_causas.index, size=num_simulations, p=probabilidad_causas.values)
+            
+            # Calcular la probabilidad de que una causa ocurra en las simulaciones
+            probabilidades_falla[circuito] = {causa: (simulaciones == causa).mean() for causa in probabilidad_causas.index}
+            
+            # Mostrar la probabilidad de cada causa para este circuito
+            print(f"\nProbabilidades de falla para el circuito {circuito}:")
+            for causa, probabilidad in probabilidades_falla[circuito].items():
+                print(f"Causa: {causa} - Probabilidad: {probabilidad * 100:.4f} %")
+        
+
+        #print(probabilidades_falla)
 
     
     

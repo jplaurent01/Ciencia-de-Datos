@@ -12,3 +12,4 @@ if __name__ == "__main__":
     proyectoCienciaDatos = datosProyecto(data_file)
     proyectoCienciaDatos.display_Pareto()
     proyectoCienciaDatos.Circuitos_a_Analizar()
+    proyectoCienciaDatos.monteCarloProbabilidadFallaCircuito()
