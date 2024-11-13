@@ -2,6 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import PercentFormatter
 import numpy as np
+from datetime import datetime, timedelta
 
 class datosProyecto: # Clase que se encarga de leer datos del proyecto
     def __init__(self, path):# Constructor clase, recibe como parametro ruta de datos
@@ -11,7 +12,8 @@ class datosProyecto: # Clase que se encarga de leer datos del proyecto
         self.dataFrame =  pd.concat((chunk for chunk in pd.read_csv(self.path, sep=';', header=None, chunksize=1000, engine="c", skiprows=1)),ignore_index=True)
         # Se le asignan al data frame los siguientes nombres de las columnas
         self.dataFrame.columns = ("Interrupción",  "Elemento",  "Fecha Salida",  "Fecha Entrada", "Causa", "Minutos Fuera", "Sistema", "Hora de Salida", "Hora de Entrada", "Nivel", "Kva", "Clientes", "Circuito", "Nombre Circuito")
-        
+        # Se convierte la columna 'Fecha Salida' a tipo fecha con el formato 'día/mes/año'
+        self.dataFrame['Fecha Salida'] = pd.to_datetime(self.dataFrame['Fecha Salida'], format='%d/%m/%Y')
 
     def display_Pareto(self): # Obtencion del pareto
         # Cuento la cantidad de veces que se repite un circuito dentro de la columna Circuito (Frecuencia de fallas)
@@ -65,7 +67,7 @@ class datosProyecto: # Clase que se encarga de leer datos del proyecto
         # Guardar el DataFrame filtrado en un nuevo archivo Excel
         self.dataFrame.to_excel(r'..\data_output\Circuitos_a_Analizar_2.xlsx', index=False)
 
-
+    # El metodo "monteCarloProbabilidadFallaCircuito" determina la probabilidad de ocurrencia de una falla por circuito
     def monteCarloProbabilidadFallaCircuito(self, num_simulations=10000):
         #Inicializar un diccionario para almacenar las probabilidades de fallas por circuito
         probabilidades_falla = {}
@@ -82,16 +84,56 @@ class datosProyecto: # Clase que se encarga de leer datos del proyecto
             # Simular las fallas usando una distribución de Monte Carlo
             simulaciones = np.random.choice(probabilidad_causas.index, size=num_simulations, p=probabilidad_causas.values)
             
-            # Calcular la probabilidad de que una causa ocurra en las simulaciones
+            # Calcular la probabilidad de que una causa ocurra en las simulaciones, se añmacenan en un dicionario
             probabilidades_falla[circuito] = {causa: (simulaciones == causa).mean() for causa in probabilidad_causas.index}
             
             # Mostrar la probabilidad de cada causa para este circuito
             print(f"\nProbabilidades de falla para el circuito {circuito}:")
             for causa, probabilidad in probabilidades_falla[circuito].items():
-                print(f"Causa: {causa} - Probabilidad: {probabilidad * 100:.4f} %")
-        
+               print(f"Causa: {causa} - Probabilidad: {probabilidad * 100:.4f} %")
+         
+        #df_probabilidades = pd.DataFrame.from_dict(probabilidades_falla, orient='index')
 
-        #print(probabilidades_falla)
+        # Guardar el DataFrame de resultados en un archivo Excel
+        #df_probabilidades.to_excel(r'..\data_output\Simulacion_probabilidad_de_Fallas.xlsx', index=False)
 
-    
-    
+    # El metodo "monteCarloProbabilidadFallaCircuitoFecha" determina la ocurrencia de futuras fallas
+    def monteCarloProbabilidadFallaCircuitoFecha(self,num_simulations=10000, forecast_days=30):
+        # Inicializar un dataframe para almacenar los resultados de las simulaciones
+        resultados_simulacion = []
+
+        # Para cada circuito, realizamos una simulación
+        for circuito, df_circuito in self.dataFrame.groupby('Nombre Circuito'):
+
+            # Contamos las ocurrencias de cada causa para este circuito
+            conteo_causas = df_circuito['Causa'].value_counts()
+            
+            # Normalizamos para que sumen a 1 (distribución de probabilidades)
+            probabilidad_causas = conteo_causas / conteo_causas.sum()
+            
+            # Simulamos las fallas usando Monte Carlo
+            simulaciones = np.random.choice(probabilidad_causas.index, size=num_simulations, p=probabilidad_causas.values)
+
+            # Obtener el promedio de la fecha de la última falla
+            fecha_ultima_falla = df_circuito['Fecha Salida'].max()
+            
+            # Simular futuras fallas y predecir su fecha de aparición
+            for simulacion in simulaciones:
+                # Se simula un incremento aleatorio de días para la próxima falla
+                dias_hasta_falla = np.random.randint(1, forecast_days)  # Entre 1 y `forecast_days` días
+                # Nueva fecha de falla es la fecha de la última falla más los días simulados
+                fecha_predicha = fecha_ultima_falla + timedelta(days=dias_hasta_falla)
+
+                # Almacenar los resultados en la lista, dentro de la lista hay un dicionario
+                resultados_simulacion.append({
+                    'Circuito': circuito,
+                    'Causa': simulacion,
+                    'Fecha Predicha': fecha_predicha.strftime('%d/%m/%Y'),
+                    'Fecha Predicha (timestamp)': fecha_predicha
+                })
+
+        # Convertir los resultados a un DataFrame
+        df_resultados = pd.DataFrame(resultados_simulacion)
+
+        df_resultados.to_excel(r'..\data_output\Simulaciones_Futuras_Fallas.xlsx', index=False)
+
