@@ -118,62 +118,43 @@ class datosProyecto: # Clase que se encarga de leer datos del proyecto
         df_resultados = pd.DataFrame(resultados_simulacion)
         # Agrupar por 'Causa' y eliminar las fechas predichas repetidas
         df_resultados_unicos = df_resultados.groupby('Causa')['Fecha Predicha'].unique().reset_index()
-        df_resultados_exploded = df_resultados_unicos.explode('Fecha Predicha').reset_index(drop=True)
-        
+        # Arreglo la informacion para desplegarla verticalemente
+        self.df_resultados_exploded = df_resultados_unicos.explode('Fecha Predicha').reset_index(drop=True)
+        # Este bloque de codigo traduce el significado del codigo de la falla
+        self.traducirCodigoCausa()
+        print(self.df_resultados_exploded)
         # Contar la cantidad de veces que aparece cada causa en la columna 'Causa'
-        conteo_causas = df_resultados_exploded['Causa'].value_counts().reset_index()
+        conteo_causas = self.df_resultados_exploded['Causa Nombre'].value_counts().reset_index()
 
         # Renombrar las columnas para que sea más claro
-        conteo_causas.columns = ['Causa', 'Cantidad de Ocurrencias']
+        conteo_causas.columns = ('Causa Nombre', 'Cantidad de Ocurrencias')
 
         # Mostrar el resultado
         print(conteo_causas)
 
         # Guardar los resultados en un archivo Excel
-        df_resultados_exploded.to_excel(r'..\data_output\Simulaciones_Futuras_Fallas.xlsx', index=False)
+        self.df_resultados_exploded.to_excel(r'..\data_output\Simulaciones_Futuras_Fallas.xlsx', index=False)
 
         # Imprimir el mensaje de éxito
         print(f"Simulaciones completas. Resultados guardados en 'Simulaciones_Futuras_Fallas.xlsx'")
 
-        """
-         # Inicializar un dataframe para almacenar los resultados de las simulaciones
-        resultados_simulacion = []
+    # Metodo que traduce el valor el codigo de la falla en su equivalente de texto
+    def traducirCodigoCausa(self):
+        # 1. Leer el archivo causas_unicas.txt y crear un diccionario de mapeo
+        causas_dict = {}
+        # Abre el archivo y procesa cada línea
+        with open('../data_input/causas_unicas.txt', 'r') as file:
+            for line in file:
+                # Divide cada línea por el guion y limpia los espacios
+                parts = line.strip().split('-', 1)
+                causa_numero = parts[0].strip()  # Número de la causa
+                causa_nombre = parts[1].strip()  # Nombre de la causa
+                causas_dict[causa_numero] = causa_nombre  # Agrega al diccionario
 
-        # Para cada causa, realizamos una simulación
-        for falla, df_causa in self.dataFrame.groupby('Causa'):
+        # 2. Crear nuevas columnas para almacenar el causa_numero y causa_nombre
+        # Usaremos `map()` para obtener el nombre de la causa basado en causa_numero
+        self.df_resultados_exploded['Causa Nombre'] = self.df_resultados_exploded['Causa'].map(causas_dict)
 
-            # Contamos las ocurrencias de cada causa para este circuito
-            conteo_causas = df_causa['Causa'].value_counts()
-            
-            # Normalizamos para que sumen a 1 (distribución de probabilidades)
-            probabilidad_causas = conteo_causas / conteo_causas.sum()
-            
-            # Simulamos las fallas usando Monte Carlo, distribucion uniforme
-            simulaciones = np.random.choice(probabilidad_causas.index, size=num_simulations, p=probabilidad_causas.values)
-
-            # Obtener el promedio de la fecha de la última falla
-            fecha_ultima_falla = df_causa['Fecha Salida'].max()
-            
-            # Simular futuras fallas y predecir su fecha de aparición
-            for simulacion in simulaciones:
-                # Se simula un incremento aleatorio de días para la próxima falla
-                dias_hasta_falla = np.random.randint(1, forecast_days)  # Entre 1 y `forecast_days` días
-                # Nueva fecha de falla es la fecha de la última falla más los días simulados
-                fecha_predicha = fecha_ultima_falla + timedelta(days=dias_hasta_falla)
-
-                # Almacenar los resultados en la lista, dentro de la lista hay un dicionario
-                resultados_simulacion.append({
-                    'Falla': falla,
-                    'Causa': simulacion,
-                    'Fecha Predicha': fecha_predicha.strftime('%d/%m/%Y')
-                })
-
-        # Convertir los resultados a un DataFrame
-        df_resultados = pd.DataFrame(resultados_simulacion)
-
-        df_resultados.to_excel(r'..\data_output\Simulaciones_Futuras_Fallas.xlsx', index=False)
-        """
-       
     # El metodo "monteCarloProbabilidadFallaCircuito" determina la probabilidad de ocurrencia de una falla por circuito
     def monteCarloProbabilidadFallaCircuito(self, num_simulations=10000):
         #Inicializar un diccionario para almacenar las probabilidades de fallas por circuito

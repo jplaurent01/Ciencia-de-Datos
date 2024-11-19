@@ -1,0 +1,26 @@
+0 - Sin Codificar
+306 - Maniobras por operación  NO programada -INT-
+106 - Momentaneas
+408 - Pérd. de Aliment. Por operaciones momentanes
+310 - Maniobras por operación RIDE
+405 - Pérd. de Aliment. por Oper. NO programadas (INT)
+409 - Pérdida de alimentador por causa desconocida
+101 - No identificada
+406 - Pérd. de alimentador por eventos del S.E.N
+407 - Pérd. de Aliment. por Oper. NO programadas (EXT)
+307 - Maniobras por operación NO programada -EXT-
+213 - Flora (Ramas)
+305 - Maniobras por operación programada
+108 - Primarios reventados o dañados
+210 - Vandalismo
+209 - Árbol
+403 - Pérd. de alimentador por agentes externos
+222 - Fuerte lluvia
+404 - Pérd. de alimentador por operaciones programadas
+402 - Pérd. de alimentador por agentes internos
+107 - Aislamiento dañado
+208 - Catástrofes
+103 - Falso contacto
+219 - Baja frecuencia
+413 - Pérd. de alimentador por Baja frecuencia
+203 - Vehículos (Colisión)
