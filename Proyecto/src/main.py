@@ -10,9 +10,11 @@ if __name__ == "__main__":
 
     # Usar la ruta concatenada para instanciar el objeto
     proyectoCienciaDatos = datosProyecto(data_file)
-    proyectoCienciaDatos.display_Pareto()
-    proyectoCienciaDatos.Circuitos_a_Analizar()
+    proyectoCienciaDatos.display_ParetoDeMasFallas()
+    proyectoCienciaDatos.fallas_a_Analizar()
+    proyectoCienciaDatos.MonteCarloPorFechaConMayorProbabilidadOcurrenciaDeFallas()
     # El metodo "monteCarloProbabilidadFallaCircuito" determina la probabilidad de ocurrencia de una falla por circuito
-    proyectoCienciaDatos.monteCarloProbabilidadFallaCircuito()
+    #proyectoCienciaDatos.monteCarloProbabilidadFallaCircuito()
     # El metodo "monteCarloProbabilidadFallaCircuitoFecha" determina la ocurrencia de futuras fallas
-    proyectoCienciaDatos.monteCarloProbabilidadFallaCircuitoFecha()
+    #proyectoCienciaDatos.monteCarloProbabilidadFallaCircuitoFecha()
+    #proyectoCienciaDatos.monteCarlo()
