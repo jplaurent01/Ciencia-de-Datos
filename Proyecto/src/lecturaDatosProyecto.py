@@ -138,6 +138,54 @@ class datosProyecto: # Clase que se encarga de leer datos del proyecto
         # Imprimir el mensaje de éxito
         print(f"Simulaciones completas. Resultados guardados en 'Simulaciones_Futuras_Fallas.xlsx'")
 
+    def monteCarloProbabilidadFallaCircuitoFecha2(self,n_simulaciones=10000):
+        ### Por fecha
+        # # Extraer año y mes de la columna "Fecha Salida"
+        self.dataFrame['Año'] = pd.to_datetime(self.dataFrame['Fecha Salida']).dt.year
+        self.dataFrame['Mes'] = pd.to_datetime(self.dataFrame['Fecha Salida']).dt.month
+
+        # # Contar el número de fallas por mes para cada año
+        fallas_mensuales = self.dataFrame.groupby(['Año', 'Mes']).size().reset_index(name='Conteo')
+
+        # # Calcular las probabilidades de ocurrencia mensual por año
+        fallas_mensuales['Probabilidad'] = fallas_mensuales.groupby('Año')['Conteo'].transform(lambda x: x / x.sum())
+
+        ## Crear un DataFrame para almacenar los resultados simulados
+        simulaciones = []
+
+        ## Realizar simulaciones Monte Carlo para cada año
+        for year in fallas_mensuales['Año'].unique():
+        ## Filtrar los datos para el año actual
+            datos_año = fallas_mensuales[fallas_mensuales['Año'] == year]
+        ## Obtener los meses y las probabilidades respectivas
+            meses = datos_año['Mes']
+            probabilidades = datos_año['Probabilidad']
+            
+        ## Simular ocurrencias mensuales
+            simulacion = np.random.choice(meses, size=n_simulaciones, p=probabilidades)
+            
+        ## Contar ocurrencias simuladas y calcular probabilidad simulada
+            conteo_simulado = pd.Series(simulacion).value_counts(normalize=True).sort_index()
+            
+        ## Guardar resultados
+            simulaciones.append(pd.DataFrame({
+                 'Mes': conteo_simulado.index,
+                 'Probabilidad Simulada': conteo_simulado.values,
+                 'Año': year
+             }))
+
+        ## Combinar los resultados de las simulaciones
+        resultados_simulacion = pd.concat(simulaciones, ignore_index=True)
+
+        ## Mostrar resultados de simulación
+        print("Resultados de simulación de Monte Carlo:")
+        print(resultados_simulacion)
+
+        ### Guardar los resultados en un archivo Excel
+        archivo_salida2 = r"..\data_output\resultados_simulacion_montecarlo_fecha.xlsx"
+        resultados_simulacion.to_excel(archivo_salida2, index=False)
+        print(f"Resultados guardados en {archivo_salida2}")
+
     # Metodo que traduce el valor el codigo de la falla en su equivalente de texto
     def traducirCodigoCausa(self):
         # 1. Leer el archivo causas_unicas.txt y crear un diccionario de mapeo
@@ -152,7 +200,6 @@ class datosProyecto: # Clase que se encarga de leer datos del proyecto
                 causas_dict[causa_numero] = causa_nombre  # Agrega al diccionario
 
         # 2. Crear nuevas columnas para almacenar el causa_numero y causa_nombre
-        # Usaremos `map()` para obtener el nombre de la causa basado en causa_numero
         self.df_resultados_exploded['Causa Nombre'] = self.df_resultados_exploded['Causa'].map(causas_dict)
 
     # El metodo "monteCarloProbabilidadFallaCircuito" determina la probabilidad de ocurrencia de una falla por circuito
@@ -225,6 +272,7 @@ class datosProyecto: # Clase que se encarga de leer datos del proyecto
 
         df_resultados.to_excel(r'..\data_output\Simulaciones_Futuras_Fallas.xlsx', index=False)
 
+
     def monteCarlo(self, n_simulaciones = 50000):
 
         # Cargar los datos del archivo Excel
@@ -255,7 +303,7 @@ class datosProyecto: # Clase que se encarga de leer datos del proyecto
         print(conteo_simulaciones)
 
         # Guardar los resultados en un archivo Excel
-        archivo_salida = "r'..\data_output\resultados_simulacion_montecarlo.xlsx"
+        archivo_salida = "..\data_output\resultados_simulacion_montecarlo.xlsx"
         conteo_simulaciones.to_excel(archivo_salida, index=False)
         print(f"Resultados guardados en {archivo_salida}")
 
