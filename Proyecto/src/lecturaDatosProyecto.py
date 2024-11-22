@@ -1,8 +1,16 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 from matplotlib.ticker import PercentFormatter
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import  timedelta
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tsa.arima.model import ARIMA
+import xgboost as xgb
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import TimeSeriesSplit
+
+
 
 class datosProyecto: # Clase que se encarga de leer datos del proyecto
     def __init__(self, path):# Constructor clase, recibe como parametro ruta de datos
@@ -75,8 +83,336 @@ class datosProyecto: # Clase que se encarga de leer datos del proyecto
         print("Conteo de fallas para causas que representan el 80%:")
         print(conteo_fallas_80)
 
+        self.dataFrame = self.dataFrame[self.dataFrame['Causa'].isin(iter(self.fallas_bajo_80))]
+        print("Se realizo filtro del pareto dento del dataframe")
+
         # Guardar el DataFrame filtrado en un nuevo archivo Excel
         #self.dataFrame.to_excel(r'..\data_output\Fallas_a_Analizar.xlsx', index=False)
+
+    def create_features(self, df):
+        """
+        Create time series features based on time series index.
+        """
+        df = df.copy()
+        df['dayofweek'] = df.index.dayofweek
+        df['quarter'] = df.index.quarter
+        df['month'] = df.index.month
+        df['year'] = df.index.year
+        df['dayofyear'] = df.index.dayofyear
+        df['dayofmonth'] = df.index.day
+        df['weekofyear'] = df.index.isocalendar().week
+        target_map = df['cantidad incidentes por dia'].to_dict()
+        df['lag1'] = (df.index - pd.Timedelta('365 days')).map(target_map)
+        df['lag2'] = (df.index - pd.Timedelta('730 days')).map(target_map)
+        df['lag3'] = (df.index - pd.Timedelta('1095 days')).map(target_map)
+        return df
+
+    #adding lag featurs to dataset
+
+    def add_lags(self, df):
+        target_map = df['cantidad incidentes por dia'].to_dict()
+        df['lag1'] = (df.index - pd.Timedelta('365 days')).map(target_map)
+        df['lag2'] = (df.index - pd.Timedelta('730 days')).map(target_map)
+        df['lag3'] = (df.index - pd.Timedelta('1095 days')).map(target_map)
+        return df
+
+    def predecirResultadosCircuito2(self, circuito_de_interes):
+        color_pal = sns.color_palette()
+        plt.style.use('fivethirtyeight')
+        plt.rcParams["axes.formatter.limits"] = (-99, 99)
+
+        # Filtrar las filas donde 'Causa' es igual a '106'
+        df_filtrado = self.dataFrame[self.dataFrame["Causa"] == circuito_de_interes]
+        df_fecha_count = df_filtrado.groupby('Fecha Salida').size().reset_index(name='cantidad incidentes por dia')
+
+         # Establecer la columna 'Fecha Salida' como índice para el gráfico
+        df_fecha_count.set_index('Fecha Salida', inplace=True)
+
+        """
+    
+        # Graficar los datos
+        sns.set()
+        plt.ylabel('Fallas')
+        plt.xlabel('Fecha')
+        plt.xticks(rotation=45)
+        
+        # Usamos 'Fecha Salida' como eje x y 'Causa' como eje y
+        plt.plot(df_filtrado.index, df_filtrado['Causa'], marker='.')
+        
+        # Mostrar la gráfica
+        plt.show()
+        """
+        # Dividir los datos en conjunto de entrenamiento y prueba basados en fecha 01-01-2024
+        train = df_fecha_count[df_fecha_count.index < pd.to_datetime("01/01/2024", format='%d/%m/%Y')]  # Entrenamiento hasta agosto 2024
+        test = df_fecha_count[df_fecha_count.index >= pd.to_datetime("01/01/2024", format='%d/%m/%Y')]  # Testeo después de agosto 2024
+
+        # Graficar
+        sns.set()
+        plt.figure(figsize=(10, 6))  # Opcional: Ajustar el tamaño de la figura
+        plt.plot(train.index, train['cantidad incidentes por dia'], color="black", label="Entrenamiento")  # Entrenamiento
+        plt.plot(test.index, test['cantidad incidentes por dia'], color="red", label="Prueba")  # Testeo
+
+        # Etiquetas y título
+        plt.ylabel('Fallas 106')
+        plt.xlabel('Fecha')
+        plt.xticks(rotation=45)
+        plt.title("Train/Test split for falla 106")
+
+        y = train['cantidad incidentes por dia']
+        ARMAmodel = SARIMAX(y, order = (1, 0, 1))
+        ARMAmodel = ARMAmodel.fit()
+        y_pred = ARMAmodel.get_forecast(len(test.index))
+        y_pred_df = y_pred.conf_int(alpha = 0.05) 
+        y_pred_df["Predictions"] = ARMAmodel.predict(start = y_pred_df.index[0], end = y_pred_df.index[-1])
+        y_pred_df.index = test.index
+        y_pred_out = y_pred_df["Predictions"] 
+        plt.plot(y_pred_out, color='green', label = 'Predictions')
+        plt.legend()
+
+        ARIMAmodel = ARIMA(y, order = (5,4,2))
+        ARIMAmodel = ARIMAmodel.fit()
+
+        y_pred_2 = ARIMAmodel.get_forecast(len(test.index))
+        y_pred_2_df = y_pred_2.conf_int(alpha = 0.05) 
+        y_pred_2_df["Predictions"] = ARIMAmodel.predict(start = y_pred_2_df.index[0], end = y_pred_2_df.index[-1])
+        y_pred_2_df.index = test.index
+        y_pred_2_out = y_pred_2_df["Predictions"] 
+        plt.plot(y_pred_2_out, color='Yellow', label = 'ARIMA Predictions')
+        plt.legend()
+
+        # Ajustar el modelo SARIMAX
+        SARIMAXmodel = SARIMAX(y, order=(1, 0, 1), seasonal_order=(2, 2, 2, 12))
+        SARIMAXmodel = SARIMAXmodel.fit()
+
+        # Realizar la predicción
+        y_pred_3 = SARIMAXmodel.get_forecast(len(test.index))
+        y_pred_3_df = y_pred_3.conf_int(alpha=0.05) 
+
+        # Predecir valores y redondearlos a enteros
+        y_pred_3_df["Predictions"] = SARIMAXmodel.predict(start=y_pred_3_df.index[0], end=y_pred_3_df.index[-1])
+        y_pred_3_df["Predictions"] = y_pred_3_df["Predictions"].round().astype(int)  # Redondear a enteros
+
+        # Ajustar el índice de las predicciones con el índice de test
+        y_pred_3_df.index = test.index
+        y_pred_3_out = y_pred_3_df["Predictions"]
+
+        # Graficar las predicciones
+        plt.plot(y_pred_3_out, color='Blue', label='SARIMA Predictions')
+
+        # Mostrar la leyenda
+        plt.legend()
+        plt.show()
+        arma_rmse = np.sqrt(mean_squared_error(test["cantidad incidentes por dia"].values, y_pred_df["Predictions"]))
+        print("RMSE: ",arma_rmse)
+        arma_rmse_2 = np.sqrt(mean_squared_error(test["cantidad incidentes por dia"].values, y_pred_2_df["Predictions"]))
+        print("RMSE: ",arma_rmse_2)
+
+        arma_rmse_3 = np.sqrt(mean_squared_error(test["cantidad incidentes por dia"].values, y_pred_2_df["Predictions"]))
+        print("RMSE: ",arma_rmse_3)
+
+    def predecirResultadosCircuito(self, circuito_de_interes):
+        color_pal = sns.color_palette()
+        plt.style.use('fivethirtyeight')
+        plt.rcParams["axes.formatter.limits"] = (-99, 99)
+
+        # Filtrar las filas donde 'Causa' es igual a '106'
+        df_filtrado = self.dataFrame[self.dataFrame["Causa"] == circuito_de_interes]
+        df_fecha_count = df_filtrado.groupby('Fecha Salida').size().reset_index(name='cantidad incidentes por dia')
+
+         # Establecer la columna 'Fecha Salida' como índice para el gráfico
+        df_fecha_count.set_index('Fecha Salida', inplace=True)
+
+        #df_fecha_count.plot(style='.', figsize=(15, 5), color=color_pal[0], title='Fallas por fecha')
+        #plt.show()
+
+        #running machine learning model
+
+        tss = TimeSeriesSplit(n_splits=2, test_size=100, gap=1)
+        df_fecha_count = df_fecha_count.sort_index()
+
+        fold = 0
+        preds = []
+        scores = []
+        for train_idx, val_idx in tss.split(df_fecha_count):
+            train = df_fecha_count.iloc[train_idx]
+            test = df_fecha_count.iloc[val_idx]
+
+            train = self.create_features(train)
+            test = self.create_features(test)
+
+            FEATURES = ['dayofyear', 'dayofweek', 'quarter', 'month','year',
+                        'lag1','lag2','lag3']
+            TARGET = 'cantidad incidentes por dia'
+
+            X_train = train[FEATURES]
+            y_train = train[TARGET]
+
+            X_test = test[FEATURES]
+            y_test = test[TARGET]
+
+            reg = xgb.XGBRegressor(base_score=0.5, booster='gbtree',    
+                                n_estimators=1000,
+                                early_stopping_rounds=50,
+                                objective='reg:squarederror',
+                                max_depth=3,
+                                learning_rate=0.01)
+            reg.fit(X_train, y_train,
+                    eval_set=[(X_train, y_train), (X_test, y_test)],
+                    verbose=100)
+
+            y_pred = reg.predict(X_test)
+            preds.append(y_pred)
+            score = np.sqrt(mean_squared_error(y_test, y_pred))
+            scores.append(score)
+
+
+        #printing scores for each fold
+
+        print(f'Score across folds {np.mean(scores):0.4f}')
+        print(f'Fold scores:{scores}')
+
+        # retraining model to predict future values
+
+        df_fecha_count = self.create_features(df_fecha_count)
+
+        FEATURES = ['dayofyear', 'dayofweek', 'quarter', 'month', 'year',
+                    'lag1','lag2','lag3']
+        TARGET = 'cantidad incidentes por dia'
+
+        X_all = df_fecha_count[FEATURES]
+        y_all = df_fecha_count[TARGET]
+
+        reg = xgb.XGBRegressor(base_score=0.5,
+                            booster='gbtree',    
+                            n_estimators=220,
+                            objective='reg:squarederror',
+                            max_depth=3,
+                            learning_rate=0.01)
+        reg.fit(X_all, y_all,
+                eval_set=[(X_all, y_all)],
+                verbose=100)
+
+        # creating future dates for model to predict
+
+        future = pd.date_range('2024-01-01','2024-12-31')
+        future_df = pd.DataFrame(index=future)
+        future_df['isFuture'] = True
+        df_fecha_count['isFuture'] = False
+        df_and_future = pd.concat([df_fecha_count, future_df])
+        df_and_future = self.create_features(df_and_future)
+        df_and_future = self.add_lags(df_and_future)
+
+        future_w_features = df_and_future.query('isFuture').copy()
+
+        #running the predict function
+
+        future_w_features['pred'] = reg.predict(future_w_features[FEATURES])
+
+
+        #plotting output from model
+
+        future_w_features['pred'].plot(figsize=(10, 5),
+                                    color=color_pal[3],
+                                    ms=1,
+                                    lw=1,
+                                    title='2024 Unit Sales Predictions')
+        plt.show()
+
+        """
+        #creating testing and training splits
+
+        train = df_fecha_count.loc[df_fecha_count.index < '01-01-2024']
+        test = df_fecha_count.loc[df_fecha_count.index >= '01-01-2024']
+
+        #plotting the split
+        #plotting the split
+
+        fig, ax = plt.subplots(figsize=(15, 5))
+        train.plot(ax=ax, label='Training Set', title='Data Train/Test Split')
+        test.plot(ax=ax, label='Test Set')
+        ax.axvline('01-01-2024', color='black', ls='--')
+        ax.legend(['Training Set', 'Test Set'])
+        plt.show()
+        """
+
+
+
+        """  
+        # Graficar los datos
+        sns.set()
+        plt.ylabel('Fallas 106')
+        plt.xlabel('Fecha')
+        plt.xticks(rotation=45)
+        
+        # Usamos 'Fecha Salida' como eje x y 'Causa' como eje y
+        plt.plot(df_filtrado.index, df_filtrado['Causa'], marker='o')
+        
+        # Mostrar la gráfica
+        plt.show()
+
+        # Dividir los datos en conjunto de entrenamiento y prueba basados en fecha
+        train = df_fecha_count[df_fecha_count.index < pd.to_datetime("22/9/2022", format='%d/%m/%Y')]  # Entrenamiento hasta agosto 2024
+        test = df_fecha_count[df_fecha_count.index >= pd.to_datetime("22/9/2022", format='%d/%m/%Y')]  # Testeo después de agosto 2024
+
+        # Graficar
+        sns.set()
+        plt.figure(figsize=(10, 6))  # Opcional: Ajustar el tamaño de la figura
+        plt.plot(train.index, train['cantidad incidentes por dia'], color="black", label="Entrenamiento")  # Entrenamiento
+        plt.plot(test.index, test['cantidad incidentes por dia'], color="red", label="Prueba")  # Testeo
+
+        # Etiquetas y título
+        plt.ylabel('Fallas 106')
+        plt.xlabel('Fecha')
+        plt.xticks(rotation=45)
+        plt.title("Train/Test split for falla 106")
+        
+        ################### Autoregressive Moving Average (ARMA) Model ################################
+        y = train['cantidad incidentes por dia']
+        # Definamos nuestro modelo. Para definir un modelo ARMA con la clase SARIMAX, pasamos los parámetros de
+        # orden de (1, 0, 1). Alfa corresponde al nivel de significancia de nuestras predicciones. Normalmente,
+        # elegimos un alfa = 0,05. Aquí, el algoritmo ARIMA calcula los límites superior e inferior alrededor 
+        # de la predicción de modo que haya un cinco por ciento de posibilidades de que el valor real esté fuera
+        # de los límites superior e inferior. Esto significa que hay un 95 por ciento de confianza en que el valor 
+        # real estará entre los límites superior e inferior de nuestras predicciones.
+        ARMAmodel = SARIMAX(y, order = (1, 0, 1))
+        #Ajuste del modelo
+        ARMAmodel = ARMAmodel.fit()
+        # Generar predicion
+        y_pred = ARMAmodel.get_forecast(len(test.index))
+        y_pred_df = y_pred.conf_int(alpha = 0.05) 
+        y_pred_df["Predictions"] = ARMAmodel.predict(start = y_pred_df.index[0], end = y_pred_df.index[-1])
+        y_pred_df.index = test.index
+        y_pred_out = y_pred_df["Predictions"]
+
+        plt.plot(y_pred_out, color='green', label = 'Predictions')
+
+        arma_rmse = np.sqrt(mean_squared_error(test["cantidad incidentes por dia"].values, y_pred_df["Predictions"]))
+        print("RMSE: ",arma_rmse)
+
+        # ARIMA tiene tres parámetros. El primer parámetro corresponde al retraso (valores pasados),
+        # el segundo corresponde a la diferenciación (esto es lo que hace que los datos no estacionarios sean
+        # estacionarios) y el último parámetro corresponde al ruido blanco (para modelar eventos de choque).
+
+        ARIMAmodel = ARIMA(y, order = (2, 2, 2))
+        ARIMAmodel = ARIMAmodel.fit()
+
+        y_pred_2 = ARIMAmodel.get_forecast(len(test.index))
+        y_pred_2_df = y_pred_2.conf_int(alpha = 0.05) 
+        y_pred_2_df["Predictions"] = ARIMAmodel.predict(start = y_pred_2_df.index[0], end = y_pred_2_df.index[-1])
+        y_pred_2_df.index = test.index
+        y_pred_2_out = y_pred_2_df["Predictions"] 
+        plt.plot(y_pred_2_out, color='Yellow', label = 'ARIMA Predictions')
+        # Mostrar leyenda
+        plt.legend()
+
+        # Mostrar el gráfico
+        plt.show() 
+        print("Fechas del teste: " + ", ".join(test.index.strftime('%d/%m/%Y')))
+        print("Fechas del SARIMAX: " + ", ".join(y_pred_out.index.strftime('%d/%m/%Y')))
+        print("Fechas del ARIMA: " + ", ".join(y_pred_2_out.index.strftime('%d/%m/%Y')))
+        """
+        
+        
 
     # Montecarlo estimar fechas con mayor probabilidad de ocurrencia de las fallas
     def MonteCarloPorFechaConMayorProbabilidadOcurrenciaDeFallas(self, num_simulations = 50, forecast_days=30):
