@@ -12,7 +12,7 @@ if __name__ == "__main__":
     proyectoCienciaDatos = datosProyecto(data_file)
     proyectoCienciaDatos.display_ParetoDeMasFallas()
     proyectoCienciaDatos.fallas_a_Analizar()
-    proyectoCienciaDatos.predecirResultadosCircuito2("108")
+    proyectoCienciaDatos.predecirResultadosCircuito2("106")
     #proyectoCienciaDatos.MonteCarloPorFechaConMayorProbabilidadOcurrenciaDeFallas()
     #proyectoCienciaDatos.monteCarloProbabilidadFallaCircuitoFecha2()
     # El metodo "monteCarloProbabilidadFallaCircuito" determina la probabilidad de ocurrencia de una falla por circuito

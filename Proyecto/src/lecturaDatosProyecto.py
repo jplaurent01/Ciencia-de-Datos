@@ -121,94 +121,54 @@ class datosProyecto: # Clase que se encarga de leer datos del proyecto
         plt.style.use('fivethirtyeight')
         plt.rcParams["axes.formatter.limits"] = (-99, 99)
 
-        # Filtrar las filas donde 'Causa' es igual a '106'
+       # Filtrar el DataFrame de acuerdo al circuito de interés (Causa)
         df_filtrado = self.dataFrame[self.dataFrame["Causa"] == circuito_de_interes]
+        
+        # Agrupar las fechas por cantidad de incidentes por día
         df_fecha_count = df_filtrado.groupby('Fecha Salida').size().reset_index(name='cantidad incidentes por dia')
-
-         # Establecer la columna 'Fecha Salida' como índice para el gráfico
+        
+        # Establecer la columna 'Fecha Salida' como índice para el análisis
         df_fecha_count.set_index('Fecha Salida', inplace=True)
-
-        """
-    
-        # Graficar los datos
-        sns.set()
-        plt.ylabel('Fallas')
-        plt.xlabel('Fecha')
-        plt.xticks(rotation=45)
         
-        # Usamos 'Fecha Salida' como eje x y 'Causa' como eje y
-        plt.plot(df_filtrado.index, df_filtrado['Causa'], marker='.')
+        # Dividir los datos en entrenamiento y prueba
+        train = df_fecha_count[df_fecha_count.index < pd.to_datetime("01/01/2024", format='%d/%m/%Y')]
+        test = df_fecha_count[df_fecha_count.index >= pd.to_datetime("01/01/2024", format='%d/%m/%Y')]
         
-        # Mostrar la gráfica
-        plt.show()
-        """
-        # Dividir los datos en conjunto de entrenamiento y prueba basados en fecha 01-01-2024
-        train = df_fecha_count[df_fecha_count.index < pd.to_datetime("01/01/2024", format='%d/%m/%Y')]  # Entrenamiento hasta agosto 2024
-        test = df_fecha_count[df_fecha_count.index >= pd.to_datetime("01/01/2024", format='%d/%m/%Y')]  # Testeo después de agosto 2024
-
-        # Graficar
-        sns.set()
-        plt.figure(figsize=(10, 6))  # Opcional: Ajustar el tamaño de la figura
-        plt.plot(train.index, train['cantidad incidentes por dia'], color="black", label="Entrenamiento")  # Entrenamiento
-        plt.plot(test.index, test['cantidad incidentes por dia'], color="red", label="Prueba")  # Testeo
-
-        # Etiquetas y título
-        plt.ylabel('Fallas 106')
-        plt.xlabel('Fecha')
-        plt.xticks(rotation=45)
-        plt.title("Train/Test split for falla 106")
-
-        y = train['cantidad incidentes por dia']
-        ARMAmodel = SARIMAX(y, order = (1, 0, 1))
-        ARMAmodel = ARMAmodel.fit()
-        y_pred = ARMAmodel.get_forecast(len(test.index))
-        y_pred_df = y_pred.conf_int(alpha = 0.05) 
-        y_pred_df["Predictions"] = ARMAmodel.predict(start = y_pred_df.index[0], end = y_pred_df.index[-1])
-        y_pred_df.index = test.index
-        y_pred_out = y_pred_df["Predictions"] 
-        plt.plot(y_pred_out, color='green', label = 'Predictions')
-        plt.legend()
-
-        ARIMAmodel = ARIMA(y, order = (5,4,2))
-        ARIMAmodel = ARIMAmodel.fit()
-
-        y_pred_2 = ARIMAmodel.get_forecast(len(test.index))
-        y_pred_2_df = y_pred_2.conf_int(alpha = 0.05) 
-        y_pred_2_df["Predictions"] = ARIMAmodel.predict(start = y_pred_2_df.index[0], end = y_pred_2_df.index[-1])
-        y_pred_2_df.index = test.index
-        y_pred_2_out = y_pred_2_df["Predictions"] 
-        plt.plot(y_pred_2_out, color='Yellow', label = 'ARIMA Predictions')
-        plt.legend()
-
-        # Ajustar el modelo SARIMAX
-        SARIMAXmodel = SARIMAX(y, order=(1, 0, 1), seasonal_order=(2, 2, 2, 12))
-        SARIMAXmodel = SARIMAXmodel.fit()
-
-        # Realizar la predicción
-        y_pred_3 = SARIMAXmodel.get_forecast(len(test.index))
-        y_pred_3_df = y_pred_3.conf_int(alpha=0.05) 
+        # Asegurar que las fechas estén alineadas
+        y_train = train['cantidad incidentes por dia']
+        y_test = test['cantidad incidentes por dia']
+        
+        # Crear y entrenar el modelo SARIMAX
+        SARIMAXmodel = SARIMAX(y_train, order=(1, 1, 2), seasonal_order=(3, 2, 3, 12))
+        SARIMAXmodel_fit = SARIMAXmodel.fit()
+        
+        # Realizar la predicción para el período de prueba (test)
+        y_pred_3 = SARIMAXmodel_fit.get_forecast(len(test))
+        y_pred_3_df = y_pred_3.conf_int(alpha=0.05)  # Intervalos de confianza
 
         # Predecir valores y redondearlos a enteros
-        y_pred_3_df["Predictions"] = SARIMAXmodel.predict(start=y_pred_3_df.index[0], end=y_pred_3_df.index[-1])
-        y_pred_3_df["Predictions"] = y_pred_3_df["Predictions"].round().astype(int)  # Redondear a enteros
-
-        # Ajustar el índice de las predicciones con el índice de test
+        y_pred_3_df["Predictions"] = SARIMAXmodel_fit.predict(start=y_pred_3_df.index[0], end=y_pred_3_df.index[-1])
+        y_pred_3_df["Predictions"] = y_pred_3_df["Predictions"].round().astype(int)
+        
+        # Ajustar las predicciones al índice de test (fechas de prueba)
         y_pred_3_df.index = test.index
         y_pred_3_out = y_pred_3_df["Predictions"]
-
-        # Graficar las predicciones
-        plt.plot(y_pred_3_out, color='Blue', label='SARIMA Predictions')
-
-        # Mostrar la leyenda
+        
+        # Graficar los resultados
+        plt.figure(figsize=(10, 6))
+        plt.plot(train.index, train['cantidad incidentes por dia'], color="black", label="Entrenamiento",  marker="D", ms=4)
+        plt.plot(test.index, test['cantidad incidentes por dia'], color="red", label="Prueba",  marker="D", ms=4)
+        plt.plot(y_pred_3_out, color='blue', label='Predicciones SARIMA',  marker="D", ms=4)
+        plt.title('Predicción de Fallas para Circuito {}'.format(circuito_de_interes))
+        plt.xlabel('Fecha')
+        plt.ylabel('Cantidad de Incidentes por Día')
+        plt.xticks(rotation=45)
         plt.legend()
         plt.show()
-        arma_rmse = np.sqrt(mean_squared_error(test["cantidad incidentes por dia"].values, y_pred_df["Predictions"]))
-        print("RMSE: ",arma_rmse)
-        arma_rmse_2 = np.sqrt(mean_squared_error(test["cantidad incidentes por dia"].values, y_pred_2_df["Predictions"]))
-        print("RMSE: ",arma_rmse_2)
 
-        arma_rmse_3 = np.sqrt(mean_squared_error(test["cantidad incidentes por dia"].values, y_pred_2_df["Predictions"]))
-        print("RMSE: ",arma_rmse_3)
+        # Calcular y mostrar el RMSE para el modelo SARIMAX
+        rmse_sarimax = np.sqrt(mean_squared_error(test["cantidad incidentes por dia"].values, y_pred_3_out))
+        print("RMSE de SARIMAX: ", rmse_sarimax)
 
     def predecirResultadosCircuito(self, circuito_de_interes):
         color_pal = sns.color_palette()
